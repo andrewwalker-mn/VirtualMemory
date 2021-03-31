@@ -1,0 +1,6 @@
+disk.o
+main.o
+myvirtualdisk
+page_table.o
+program.o
+virtmem
