@@ -13,12 +13,14 @@ how to use the page table and disk interfaces.
 #include <cassert>
 #include <iostream>
 #include <string.h>
+#include <stdlib.h>
+
+#define MAX_BLOCKS 10000
 
 using namespace std;
 
 // Prototype for test program
 typedef void (*program_f)(char *data, int length);
-
 
 // Number of physical frames
 int nframes;
@@ -26,6 +28,8 @@ int nframes;
 // Pointer to disk for access from handlers
 struct disk *disk = nullptr;
 
+// Keep track of which blocks are in physical memory
+int physicalMemory[MAX_BLOCKS];
 
 // Simple handler for pages == frames
 void page_fault_handler_example(struct page_table *pt, int page) {
@@ -38,8 +42,8 @@ void page_fault_handler_example(struct page_table *pt, int page) {
 
 	// Map the page to the same frame number and set to read/write
 	// TODO - Disable exit and enable page table update for example
-	exit(1);
-	//page_table_set_entry(pt, page, page, PROT_READ | PROT_WRITE);
+	// exit(1);
+	page_table_set_entry(pt, page, page, PROT_READ | PROT_WRITE);
 
 	// Print the page table contents
 	cout << "After ----------------------------" << endl;
@@ -48,6 +52,46 @@ void page_fault_handler_example(struct page_table *pt, int page) {
 }
 
 // TODO - Handler(s) and page eviction algorithms
+// Rand handler. 
+// **Abstract some of this page replacement functionality for ease in future
+// **Do the separate read/write dirty bit stuff
+void page_fault_handler_rand(struct page_table *pt, int page) {
+	// cout << "page fault on page #" << page << endl;
+	// Print the page table contents
+	// cout << "Before ---------------------------" << endl;
+	// page_table_print(pt);
+	// cout << "----------------------------------" << endl;
+    
+  // see if there are any empty frames
+  int firstOpenFrame = 0;
+  for (firstOpenFrame; firstOpenFrame<nframes; firstOpenFrame++) {
+    if (physicalMemory[firstOpenFrame] == -1)
+      break;
+  }
+  if (firstOpenFrame != nframes) { // take empty frame if there is one
+    // cout << "page: " << page << "firstOpen: " << firstOpenFrame << endl;
+    page_table_set_entry(pt, page, firstOpenFrame, PROT_READ | PROT_WRITE);
+    physicalMemory[firstOpenFrame] = page;
+  }
+  else { // evict page at random
+    int randFrame = rand() % page_table_get_nframes(pt);
+    // cout << "evict " << randFrame << endl;
+    int frameNum = -1;
+    int bits = -1;
+    page_table_get_entry(pt, page, &frameNum, &bits);
+    // cout << "page: " << page << " frameNum: " << frameNum << " bits: " << bits << endl;
+    disk_write(disk, physicalMemory[randFrame], page_table_get_physmem(pt)+randFrame*PAGE_SIZE);
+    disk_read(disk, page, page_table_get_physmem(pt)+randFrame*PAGE_SIZE);
+    page_table_set_entry(pt, page, randFrame, PROT_READ | PROT_WRITE);
+    page_table_set_entry(pt, physicalMemory[randFrame], 0, 0);
+    physicalMemory[randFrame] = page;
+  }
+
+	// Print the page table contents
+	// cout << "After ----------------------------" << endl;
+	// page_table_print(pt);
+	// cout << "----------------------------------" << endl;
+}
 
 int main(int argc, char *argv[]) {
 	// Check argument count
@@ -65,7 +109,8 @@ int main(int argc, char *argv[]) {
 	// Validate the algorithm specified
 	if ((strcmp(algorithm, "rand") != 0) &&
 	    (strcmp(algorithm, "fifo") != 0) &&
-	    (strcmp(algorithm, "custom") != 0)) {
+	    (strcmp(algorithm, "custom") != 0) &&
+      (strcmp(algorithm, "example") != 0)) {
 		cerr << "ERROR: Unknown algorithm: " << algorithm << endl;
 		exit(1);
 	}
@@ -92,6 +137,28 @@ int main(int argc, char *argv[]) {
 	}
 
 	// TODO - Any init needed
+  for (int i=0; i<nframes; i++) {
+    physicalMemory[i] = -1; 
+  }
+  // // idk why this doesn't work lmao
+  // // void *algorithm_p(page_table*, int);
+  // program_f algorithm_p = NULL;
+	// if (!strcmp(algorithm, "example")) {
+		// algorithm_p = page_fault_handler_example;
+	// }
+	// else if (!strcmp(algorithm, "rand")) {
+		// algorithm_p = page_fault_handler_example;
+	// }
+	// else if (!strcmp(algorithm, "fifo")) {
+		// algorithm_p = page_fault_handler_example;
+	// }
+	// else if (!strcmp(algorithm, "custom")) {
+		// algorithm_p = page_fault_handler_example;
+	// }
+	// else {
+		// cerr << "ERROR: Unknown algorithm: " << algorithm << endl;
+		// exit(1);
+	// }
 
 	// Create a virtual disk
 	disk = disk_open("myvirtualdisk", npages);
@@ -100,8 +167,21 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 
+
 	// Create a page table
-	struct page_table *pt = page_table_create(npages, nframes, page_fault_handler_example /* TODO - Replace with your handler(s)*/);
+  struct page_table *pt;
+  int notImplemented = 0;
+  if (!strcmp(algorithm, "rand")) {
+    pt = page_table_create(npages, nframes, page_fault_handler_rand);
+  }
+  else if (!strcmp(algorithm, "example")) {
+    pt = page_table_create(npages, nframes, page_fault_handler_example);
+  }
+  else {
+    cout << "Algorithm " << algorithm << " not yet implemented. Using rand instead." << endl;
+    pt = page_table_create(npages, nframes, page_fault_handler_rand);
+    notImplemented = 1;
+  }
 	if (!pt) {
 		cerr << "ERROR: Couldn't create page table: " << strerror(errno) << endl;
 		return 1;
@@ -114,6 +194,11 @@ int main(int argc, char *argv[]) {
 	// Clean up the page table and disk
 	page_table_delete(pt);
 	disk_close(disk);
+  
+  if (notImplemented) {
+    cout << "If you would like to use example, specify this secret keyword." << endl;
+  }
+
 
 	return 0;
 }
