@@ -54,14 +54,23 @@ void page_fault_handler_example(struct page_table *pt, int page) {
 // TODO - Handler(s) and page eviction algorithms
 // Rand handler. 
 // **Abstract some of this page replacement functionality for ease in future
-// **Do the separate read/write dirty bit stuff
 void page_fault_handler_rand(struct page_table *pt, int page) {
 	// cout << "page fault on page #" << page << endl;
 	// Print the page table contents
 	// cout << "Before ---------------------------" << endl;
 	// page_table_print(pt);
 	// cout << "----------------------------------" << endl;
-    
+  
+  // Handling because of improper permissions or because page fault?
+  int frameNum = -1;
+  int bits = -1;
+  page_table_get_entry(pt, page, &frameNum, &bits);
+  if (bits != 0) {//improper permissions
+    page_table_set_entry(pt, page, frameNum, PROT_READ | PROT_WRITE);
+    return;
+  }
+  // else, true page fault
+  
   // see if there are any empty frames
   int firstOpenFrame = 0;
   for (firstOpenFrame; firstOpenFrame<nframes; firstOpenFrame++) {
@@ -70,19 +79,21 @@ void page_fault_handler_rand(struct page_table *pt, int page) {
   }
   if (firstOpenFrame != nframes) { // take empty frame if there is one
     // cout << "page: " << page << "firstOpen: " << firstOpenFrame << endl;
-    page_table_set_entry(pt, page, firstOpenFrame, PROT_READ | PROT_WRITE);
+    page_table_set_entry(pt, page, firstOpenFrame, PROT_READ);
     physicalMemory[firstOpenFrame] = page;
   }
   else { // evict page at random
     int randFrame = rand() % page_table_get_nframes(pt);
     // cout << "evict " << randFrame << endl;
-    int frameNum = -1;
-    int bits = -1;
-    page_table_get_entry(pt, page, &frameNum, &bits);
+    frameNum = -1;
+    bits = -1;
+    page_table_get_entry(pt, physicalMemory[randFrame], &frameNum, &bits);
     // cout << "page: " << page << " frameNum: " << frameNum << " bits: " << bits << endl;
-    disk_write(disk, physicalMemory[randFrame], page_table_get_physmem(pt)+randFrame*PAGE_SIZE);
-    disk_read(disk, page, page_table_get_physmem(pt)+randFrame*PAGE_SIZE);
-    page_table_set_entry(pt, page, randFrame, PROT_READ | PROT_WRITE);
+    if (bits & PROT_WRITE) { // write back to disk if dirty, otherwise do not
+      disk_write(disk, physicalMemory[randFrame], page_table_get_physmem(pt)+randFrame*PAGE_SIZE);
+    }
+    disk_read(disk, page, page_table_get_physmem(pt)+randFrame*PAGE_SIZE);     
+    page_table_set_entry(pt, page, randFrame, PROT_READ);
     page_table_set_entry(pt, physicalMemory[randFrame], 0, 0);
     physicalMemory[randFrame] = page;
   }
