@@ -31,6 +31,26 @@ struct disk *disk = nullptr;
 // Keep track of which blocks are in physical memory
 int physicalMemory[MAX_BLOCKS];
 
+// Used for fifo implementation to monitor oldest frame
+int fifoIdx = 0;
+
+// Monitor page faults, disk reads, disk writes
+int pageFaults = 0;
+int diskReads = 0;
+int diskWrites = 0;
+int evictions = 0;
+
+// Wrappers for diskWrite and diskRead to keep track
+void diskWrite(struct disk *d, int block, const char *data) {
+  disk_write(d, block, data);
+  diskWrites++;
+}
+
+void diskRead(struct disk *d, int block, char *data) {
+  disk_read(d, block, data);
+  diskReads++;
+}
+
 // Simple handler for pages == frames
 void page_fault_handler_example(struct page_table *pt, int page) {
 	cout << "page fault on page #" << page << endl;
@@ -51,6 +71,7 @@ void page_fault_handler_example(struct page_table *pt, int page) {
 	cout << "----------------------------------" << endl;
 }
 
+// ---------- Utility functions ---------- //
 int permissionsOrFault(struct page_table *pt, int page) { // returns 1 if improper permissions, 0 if true page fault
   int frameNum = -1;
   int bits = -1;
@@ -59,6 +80,7 @@ int permissionsOrFault(struct page_table *pt, int page) { // returns 1 if improp
     page_table_set_entry(pt, page, frameNum, PROT_READ | PROT_WRITE);
     return 1;
   }
+  pageFaults++;
   return 0;
 }
 
@@ -78,12 +100,13 @@ void swapFrames(struct page_table *pt, int page, int frameIdx) { // swaps the cu
   page_table_get_entry(pt, physicalMemory[frameIdx], &frameNum, &bits);
   // cout << "page: " << page << " frameNum: " << frameNum << " bits: " << bits << endl;
   if (bits & PROT_WRITE) { // write back to disk if dirty, otherwise do not
-    disk_write(disk, physicalMemory[frameIdx], page_table_get_physmem(pt)+frameIdx*PAGE_SIZE);
+    diskWrite(disk, physicalMemory[frameIdx], page_table_get_physmem(pt)+frameIdx*PAGE_SIZE);
   }
-  disk_read(disk, page, page_table_get_physmem(pt)+frameIdx*PAGE_SIZE);     
+  diskRead(disk, page, page_table_get_physmem(pt)+frameIdx*PAGE_SIZE);     
   page_table_set_entry(pt, page, frameIdx, PROT_READ);
   page_table_set_entry(pt, physicalMemory[frameIdx], 0, 0);
   physicalMemory[frameIdx] = page;
+  evictions++;
 }
 
 // TODO - Handler(s) and page eviction algorithms
@@ -117,7 +140,6 @@ void page_fault_handler_rand(struct page_table *pt, int page) {
 	// cout << "----------------------------------" << endl;
 }
 
-int fifoIdx = 0;
 void page_fault_handler_fifo(struct page_table *pt, int page) {
   if (permissionsOrFault(pt, page))
     return;
@@ -217,7 +239,7 @@ int main(int argc, char *argv[]) {
   if (!strcmp(algorithm, "rand")) {
     pt = page_table_create(npages, nframes, page_fault_handler_rand);
   }
-  if (!strcmp(algorithm, "fifo")) {
+  else if (!strcmp(algorithm, "fifo")) {
     pt = page_table_create(npages, nframes, page_fault_handler_fifo);
   }
   else if (!strcmp(algorithm, "example")) {
@@ -245,6 +267,7 @@ int main(int argc, char *argv[]) {
     cout << "If you would like to use example, specify this secret keyword." << endl;
   }
 
+  cout << "Page faults: " << pageFaults << " Disk reads: " << diskReads << " Disk writes: " << diskWrites << endl; //" Evictions: " << evictions << endl;
 
 	return 0;
 }
