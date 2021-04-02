@@ -51,6 +51,41 @@ void page_fault_handler_example(struct page_table *pt, int page) {
 	cout << "----------------------------------" << endl;
 }
 
+int permissionsOrFault(struct page_table *pt, int page) { // returns 1 if improper permissions, 0 if true page fault
+  int frameNum = -1;
+  int bits = -1;
+  page_table_get_entry(pt, page, &frameNum, &bits);
+  if (bits != 0) { //improper permissions
+    page_table_set_entry(pt, page, frameNum, PROT_READ | PROT_WRITE);
+    return 1;
+  }
+  return 0;
+}
+
+int firstEmptyFrame() { // returns the index of the first unused frame in physicalMemory, otherwise returns the length of physicalMemory
+  int firstOpenFrame = 0;
+  for (firstOpenFrame; firstOpenFrame<nframes; firstOpenFrame++) {
+    if (physicalMemory[firstOpenFrame] == -1)
+      break;
+  }
+  return firstOpenFrame;
+}
+
+void swapFrames(struct page_table *pt, int page, int frameIdx) { // swaps the current page with the one in frameIdx of physicalMemory
+  // cout << "evict " << frameIdx << endl;
+  int frameNum = -1;
+  int bits = -1;
+  page_table_get_entry(pt, physicalMemory[frameIdx], &frameNum, &bits);
+  // cout << "page: " << page << " frameNum: " << frameNum << " bits: " << bits << endl;
+  if (bits & PROT_WRITE) { // write back to disk if dirty, otherwise do not
+    disk_write(disk, physicalMemory[frameIdx], page_table_get_physmem(pt)+frameIdx*PAGE_SIZE);
+  }
+  disk_read(disk, page, page_table_get_physmem(pt)+frameIdx*PAGE_SIZE);     
+  page_table_set_entry(pt, page, frameIdx, PROT_READ);
+  page_table_set_entry(pt, physicalMemory[frameIdx], 0, 0);
+  physicalMemory[frameIdx] = page;
+}
+
 // TODO - Handler(s) and page eviction algorithms
 // Rand handler. 
 // **Abstract some of this page replacement functionality for ease in future
@@ -62,40 +97,18 @@ void page_fault_handler_rand(struct page_table *pt, int page) {
 	// cout << "----------------------------------" << endl;
   
   // Handling because of improper permissions or because page fault?
-  int frameNum = -1;
-  int bits = -1;
-  page_table_get_entry(pt, page, &frameNum, &bits);
-  if (bits != 0) {//improper permissions
-    page_table_set_entry(pt, page, frameNum, PROT_READ | PROT_WRITE);
+  if (permissionsOrFault(pt, page))
     return;
-  }
-  // else, true page fault
   
   // see if there are any empty frames
-  int firstOpenFrame = 0;
-  for (firstOpenFrame; firstOpenFrame<nframes; firstOpenFrame++) {
-    if (physicalMemory[firstOpenFrame] == -1)
-      break;
-  }
+  int firstOpenFrame = firstEmptyFrame();
   if (firstOpenFrame != nframes) { // take empty frame if there is one
-    // cout << "page: " << page << "firstOpen: " << firstOpenFrame << endl;
     page_table_set_entry(pt, page, firstOpenFrame, PROT_READ);
     physicalMemory[firstOpenFrame] = page;
   }
   else { // evict page at random
     int randFrame = rand() % page_table_get_nframes(pt);
-    // cout << "evict " << randFrame << endl;
-    frameNum = -1;
-    bits = -1;
-    page_table_get_entry(pt, physicalMemory[randFrame], &frameNum, &bits);
-    // cout << "page: " << page << " frameNum: " << frameNum << " bits: " << bits << endl;
-    if (bits & PROT_WRITE) { // write back to disk if dirty, otherwise do not
-      disk_write(disk, physicalMemory[randFrame], page_table_get_physmem(pt)+randFrame*PAGE_SIZE);
-    }
-    disk_read(disk, page, page_table_get_physmem(pt)+randFrame*PAGE_SIZE);     
-    page_table_set_entry(pt, page, randFrame, PROT_READ);
-    page_table_set_entry(pt, physicalMemory[randFrame], 0, 0);
-    physicalMemory[randFrame] = page;
+    swapFrames(pt, page, randFrame);
   }
 
 	// Print the page table contents
