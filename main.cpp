@@ -14,6 +14,8 @@ how to use the page table and disk interfaces.
 #include <iostream>
 #include <string.h>
 #include <stdlib.h>
+#include <queue>
+
 
 #define MAX_BLOCKS 10000
 
@@ -33,6 +35,10 @@ int physicalMemory[MAX_BLOCKS];
 
 // Used for fifo implementation to monitor oldest frame
 int fifoIdx = 0;
+
+// Used to track read and write bit frames
+queue<int> readFrames;
+queue<int> writeFrames;
 
 // Monitor page faults, disk reads, disk writes
 int pageFaults = 0;
@@ -102,7 +108,7 @@ void swapFrames(struct page_table *pt, int page, int frameIdx) { // swaps the cu
   if (bits & PROT_WRITE) { // write back to disk if dirty, otherwise do not
     diskWrite(disk, physicalMemory[frameIdx], page_table_get_physmem(pt)+frameIdx*PAGE_SIZE);
   }
-  diskRead(disk, page, page_table_get_physmem(pt)+frameIdx*PAGE_SIZE);     
+  diskRead(disk, page, page_table_get_physmem(pt)+frameIdx*PAGE_SIZE);
   page_table_set_entry(pt, page, frameIdx, PROT_READ);
   page_table_set_entry(pt, physicalMemory[frameIdx], 0, 0);
   physicalMemory[frameIdx] = page;
@@ -110,7 +116,7 @@ void swapFrames(struct page_table *pt, int page, int frameIdx) { // swaps the cu
 }
 
 // TODO - Handler(s) and page eviction algorithms
-// Rand handler. 
+// Rand handler.
 // **Abstract some of this page replacement functionality for ease in future
 void page_fault_handler_rand(struct page_table *pt, int page) {
 	// cout << "page fault on page #" << page << endl;
@@ -118,11 +124,11 @@ void page_fault_handler_rand(struct page_table *pt, int page) {
 	// cout << "Before ---------------------------" << endl;
 	// page_table_print(pt);
 	// cout << "----------------------------------" << endl;
-  
+
   // Handling because of improper permissions or because page fault?
   if (permissionsOrFault(pt, page))
     return;
-  
+
   // see if there are any empty frames
   int firstOpenFrame = firstEmptyFrame();
   if (firstOpenFrame != nframes) { // take empty frame if there is one
@@ -143,7 +149,7 @@ void page_fault_handler_rand(struct page_table *pt, int page) {
 void page_fault_handler_fifo(struct page_table *pt, int page) {
   if (permissionsOrFault(pt, page))
     return;
-  
+
   // see if there are any empty frames
   int firstOpenFrame = firstEmptyFrame();
   if (firstOpenFrame != nframes) { // take empty frame if there is one
@@ -155,6 +161,22 @@ void page_fault_handler_fifo(struct page_table *pt, int page) {
     fifoIdx++;
     if (fifoIdx == nframes)
       fifoIdx = 0;
+  }
+}
+
+void page_fault_handler_custom(struct page_table *pt, int page) {
+  if (permissionsOrFault(pt, page))
+    return;
+
+  // see if there are any empty frames
+  int firstOpenFrame = firstEmptyFrame();
+  if (firstOpenFrame != nframes) { // take empty frame if there is one
+    page_table_set_entry(pt, page, firstOpenFrame, PROT_READ);
+    physicalMemory[firstOpenFrame] = page;
+  }
+  else { // evict page at random
+    int randFrame = rand() % page_table_get_nframes(pt);
+    swapFrames(pt, page, randFrame);
   }
 }
 
@@ -203,7 +225,7 @@ int main(int argc, char *argv[]) {
 
 	// TODO - Any init needed
   for (int i=0; i<nframes; i++) {
-    physicalMemory[i] = -1; 
+    physicalMemory[i] = -1;
   }
   // // idk why this doesn't work lmao
   // // void *algorithm_p(page_table*, int);
@@ -245,6 +267,9 @@ int main(int argc, char *argv[]) {
   else if (!strcmp(algorithm, "example")) {
     pt = page_table_create(npages, nframes, page_fault_handler_example);
   }
+  else if (!strcmp(algorithm, "custom")) {
+    pt = page_table_create(npages, nframes, page_fault_handler_custom);
+  }
   else {
     cout << "Algorithm " << algorithm << " not yet implemented. Using rand instead." << endl;
     pt = page_table_create(npages, nframes, page_fault_handler_rand);
@@ -262,7 +287,7 @@ int main(int argc, char *argv[]) {
 	// Clean up the page table and disk
 	page_table_delete(pt);
 	disk_close(disk);
-  
+
   if (notImplemented) {
     cout << "If you would like to use example, specify this secret keyword." << endl;
   }
