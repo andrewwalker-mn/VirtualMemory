@@ -117,6 +117,25 @@ void page_fault_handler_rand(struct page_table *pt, int page) {
 	// cout << "----------------------------------" << endl;
 }
 
+int fifoIdx = 0;
+void page_fault_handler_fifo(struct page_table *pt, int page) {
+  if (permissionsOrFault(pt, page))
+    return;
+  
+  // see if there are any empty frames
+  int firstOpenFrame = firstEmptyFrame();
+  if (firstOpenFrame != nframes) { // take empty frame if there is one
+    page_table_set_entry(pt, page, firstOpenFrame, PROT_READ);
+    physicalMemory[firstOpenFrame] = page;
+  }
+  else { // evict page at fifoIdx
+    swapFrames(pt, page, fifoIdx);
+    fifoIdx++;
+    if (fifoIdx == nframes)
+      fifoIdx = 0;
+  }
+}
+
 int main(int argc, char *argv[]) {
 	// Check argument count
 	if (argc != 5) {
@@ -197,6 +216,9 @@ int main(int argc, char *argv[]) {
   int notImplemented = 0;
   if (!strcmp(algorithm, "rand")) {
     pt = page_table_create(npages, nframes, page_fault_handler_rand);
+  }
+  if (!strcmp(algorithm, "fifo")) {
+    pt = page_table_create(npages, nframes, page_fault_handler_fifo);
   }
   else if (!strcmp(algorithm, "example")) {
     pt = page_table_create(npages, nframes, page_fault_handler_example);
