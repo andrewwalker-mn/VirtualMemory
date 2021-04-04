@@ -5,7 +5,7 @@ d = {}
 
 pages = 100
 progs = ["sort", "scan", "focus"]
-algs = ["rand", "fifo"] #, "custom"]
+algs = ["rand", "fifo", "custom"]
 frames = [1, 2, 10, 25, 50, 100]
 linestyles = {"page_faults": "solid", "disk_reads": "dotted", "disk_writes": "dashed"}
 colors = {"rand":"blue", "fifo":"orange", "custom":"green"}
@@ -24,7 +24,6 @@ for prog in progs:
       dd["page_faults"] = ret_val.split(" ")[6]
       dd["disk_reads"] = ret_val.split(" ")[9]
       dd["disk_writes"] = ret_val.split(" ")[12].strip()
-
 
 for prog in progs:
   fig = plt.figure()
@@ -45,7 +44,7 @@ for prog in progs:
   lines = ax.get_lines()
   #l1 = ax.legend(lines[0:3], linestyles)
   l1 = ax.legend(dummy_lines, linestyles, loc=1)
-  l2 = ax.legend([lines[i] for i in [0,6]], colors, loc=3)
+  l2 = ax.legend([lines[i] for i in [0,6,12]], colors, loc=3)
   ax.add_artist(l1)
   #fig.tight_layout()
   ax.set_title(f"Num frames vs num pagefault/diskread/diskwrite for {prog} program across algs", fontsize=10)
