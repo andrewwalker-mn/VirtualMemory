@@ -178,6 +178,7 @@ void page_fault_handler_custom(struct page_table *pt, int page) {
     return;
   }
 
+
   int firstOpenFrame = firstEmptyFrame();
   if (firstOpenFrame != nframes) { // take empty frame if there is one
     page_table_set_entry(pt, page, firstOpenFrame, PROT_READ);
@@ -196,7 +197,7 @@ void page_fault_handler_custom(struct page_table *pt, int page) {
       readFrames.erase(readFrames.begin() + randNum);
       readFrames.push_back(page);
       swapFrames(pt, page, frameNum);
-      // cout << "evicting first readframe, readframes: " << + readFrames.size() << endl;
+      // cout << "evicting readframe, readframes: " << + readFrames.size() << endl;
     }
     else {
       int randNum = rand() % writeFrames.size();

@@ -4,3 +4,4 @@ myvirtualdisk
 page_table.o
 program.o
 virtmem
+*.png
