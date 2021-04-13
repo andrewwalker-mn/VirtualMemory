@@ -7,6 +7,8 @@ do
     ./virtmem $page $frame rand sort
     echo ./virtmem $page $frame custom sort
     ./virtmem $page $frame custom sort
+    echo ./virtmem $page $frame fifo sort
+    ./virtmem $page $frame fifo sort
     done
 done
 
@@ -21,6 +23,8 @@ do
     ./virtmem $page $frame rand scan
     echo ./virtmem $page $frame custom scan
     ./virtmem $page $frame custom scan
+    echo ./virtmem $page $frame fifo scan
+    ./virtmem $page $frame fifo scan
     done
 done
 
@@ -35,5 +39,7 @@ do
     ./virtmem $page $frame rand focus
     echo ./virtmem $page $frame custom focus
     ./virtmem $page $frame custom focus
+    echo ./virtmem $page $frame fifo focus
+    ./virtmem $page $frame fifo focus
     done
 done

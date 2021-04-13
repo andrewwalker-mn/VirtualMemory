@@ -33,9 +33,10 @@ for prog in progs:
     dtest = d[prog][alg]
     dummy_lines = []
     for line in linestyles.keys():
-        if (prog != 'sort' or alg != 'custom' or (line != 'page_faults' and line != 'disk_reads')):
-          ax.plot([int(k) for k in list(dtest.keys())], [int(dtest[key][line]) for key in dtest.keys()], color=colors[alg], linestyle=linestyles[line])
-          dummy_lines.append(ax.plot([], [], color="black", linestyle=linestyles[line])[0])
+        # ADD THIS LINE TO SEE BETTER CUSTOM SORT, ALSO COMMENT OUT LINES FURTHER DOWN
+        # if (prog != 'sort' or alg != 'custom' or (line != 'page_faults' and line != 'disk_reads')):
+      ax.plot([int(k) for k in list(dtest.keys())], [int(dtest[key][line]) for key in dtest.keys()], color=colors[alg], linestyle=linestyles[line])
+      dummy_lines.append(ax.plot([], [], color="black", linestyle=linestyles[line])[0])
   """plt.plot([d[prog][alg] for alg in algs])
   plt.savefig(prog+".png")
   plt.xlabel("Number of frames")
@@ -45,9 +46,13 @@ for prog in progs:
   lines = ax.get_lines()
 
   #l1 = ax.legend(lines[0:3], linestyles)
-  # l1 = ax.legend(dummy_lines, linestyles, loc=1)
-  # l2 = ax.legend([lines[i] for i in [0,6,12]], colors, loc=3)
-  # ax.add_artist(l1)
+
+  ##### COMMENT THESE LINES OUT TO SEE BETTER CUSTOM SORT
+  l1 = ax.legend(dummy_lines, linestyles, loc=1)
+  l2 = ax.legend([lines[i] for i in [0,6,12]], colors, loc=3)
+  ##### __________________________________________________
+
+  ax.add_artist(l1)
   #fig.tight_layout()
   ax.set_title(f"Num frames vs num pagefault/diskread/diskwrite for {prog} program across algs", fontsize=10)
   ax.set_xlabel("Num Frames")

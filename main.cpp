@@ -37,7 +37,7 @@ int physicalMemory[MAX_BLOCKS];
 int fifoIdx = 0;
 
 // Used to track read and write bit frames
-// no queue because want reads and writes from anywhere in the data structure - so that once something gets written to, we remove it from readframes and add
+// once something gets written to, we remove it from readframes and add
 // it to writeframes. All frames initially end up in readframes, of course.
 // when we need to swap out a frame, we pull from readframes first and if nothing exists in readFrames we check writeFrames
 vector<int> readFrames;
@@ -103,11 +103,9 @@ int firstEmptyFrame() { // returns the index of the first unused frame in physic
 }
 
 void swapFrames(struct page_table *pt, int page, int frameIdx) { // swaps the current page with the one in frameIdx of physicalMemory
-  // cout << "evict " << frameIdx << endl;
   int frameNum = -1;
   int bits = -1;
   page_table_get_entry(pt, physicalMemory[frameIdx], &frameNum, &bits);
-  // cout << "page: " << page << " frameNum: " << frameNum << " bits: " << bits << endl;
   if (bits & PROT_WRITE) { // write back to disk if dirty, otherwise do not
     diskWrite(disk, physicalMemory[frameIdx], page_table_get_physmem(pt)+frameIdx*PAGE_SIZE);
   }
@@ -118,17 +116,8 @@ void swapFrames(struct page_table *pt, int page, int frameIdx) { // swaps the cu
   evictions++;
 }
 
-// TODO - Handler(s) and page eviction algorithms
 // Rand handler.
-// **Abstract some of this page replacement functionality for ease in future
 void page_fault_handler_rand(struct page_table *pt, int page) {
-  // srand(time(NULL));
-	// cout << "page fault on page #" << page << endl;
-	// Print the page table contents
-	// cout << "Before ---------------------------" << endl;
-	// page_table_print(pt);
-	// cout << "----------------------------------" << endl;
-
   // Handling because of improper permissions or because page fault?
   if (permissionsOrFault(pt, page))
     return;
@@ -151,6 +140,7 @@ void page_fault_handler_rand(struct page_table *pt, int page) {
 	// cout << "----------------------------------" << endl;
 }
 
+// because we load pages into memory linearly, we can also track the latest page loaded linearly - no fancy data structures needed
 void page_fault_handler_fifo(struct page_table *pt, int page) {
   if (permissionsOrFault(pt, page))
     return;
@@ -171,10 +161,9 @@ void page_fault_handler_fifo(struct page_table *pt, int page) {
 
 void page_fault_handler_custom(struct page_table *pt, int page) {
   if (permissionsOrFault(pt, page)) {
+    // move the page to the write list, since its permissions were changed and it was written to
     readFrames.erase(std::remove(readFrames.begin(), readFrames.end(), page), readFrames.end());
-    // readFrames.remove(page);
     writeFrames.push_back(page);
-    // cout << "switching readframe to writeframe" << endl;
     return;
   }
 
@@ -184,11 +173,11 @@ void page_fault_handler_custom(struct page_table *pt, int page) {
     page_table_set_entry(pt, page, firstOpenFrame, PROT_READ);
     physicalMemory[firstOpenFrame] = page;
     readFrames.push_back(page);
-    // cout << "found empty frame, readframes: " << + readFrames.size() << endl;
   }
-  else { // evict page at random
-    // srand(time(NULL));
+  else {
     if (readFrames.size() > 0) {
+      // check the readlist first, to avoid needing to do a disk write
+      // we still use a random selection within each list since rand is generally better than fifo
       int randNum = rand() % readFrames.size();
       int temp = readFrames[randNum];
       int frameNum = -1;
@@ -197,7 +186,6 @@ void page_fault_handler_custom(struct page_table *pt, int page) {
       readFrames.erase(readFrames.begin() + randNum);
       readFrames.push_back(page);
       swapFrames(pt, page, frameNum);
-      // cout << "evicting readframe, readframes: " << + readFrames.size() << endl;
     }
     else {
       int randNum = rand() % writeFrames.size();
@@ -208,22 +196,9 @@ void page_fault_handler_custom(struct page_table *pt, int page) {
       writeFrames.erase(writeFrames.begin() + randNum);
       readFrames.push_back(page);
       swapFrames(pt, page, frameNum);
-      // cout << "evicting writeframe, writeframes: " << writeFrames.size() << endl;
     }
   }
-  // if (permissionsOrFault(pt, page))
-  //   return;
-  //
-  // // see if there are any empty frames
-  // int firstOpenFrame = firstEmptyFrame();
-  // if (firstOpenFrame != nframes) { // take empty frame if there is one
-  //   page_table_set_entry(pt, page, firstOpenFrame, PROT_READ);
-  //   physicalMemory[firstOpenFrame] = page;
-  // }
-  // else { // evict page at random
-  //   int randFrame = rand() % page_table_get_nframes(pt);
-  //   swapFrames(pt, page, randFrame);
-  // }
+
 }
 
 int main(int argc, char *argv[]) {
@@ -274,25 +249,6 @@ int main(int argc, char *argv[]) {
   for (int i=0; i<nframes; i++) {
     physicalMemory[i] = -1;
   }
-  // // idk why this doesn't work lmao
-  // // void *algorithm_p(page_table*, int);
-  // program_f algorithm_p = NULL;
-	// if (!strcmp(algorithm, "example")) {
-		// algorithm_p = page_fault_handler_example;
-	// }
-	// else if (!strcmp(algorithm, "rand")) {
-		// algorithm_p = page_fault_handler_example;
-	// }
-	// else if (!strcmp(algorithm, "fifo")) {
-		// algorithm_p = page_fault_handler_example;
-	// }
-	// else if (!strcmp(algorithm, "custom")) {
-		// algorithm_p = page_fault_handler_example;
-	// }
-	// else {
-		// cerr << "ERROR: Unknown algorithm: " << algorithm << endl;
-		// exit(1);
-	// }
 
 	// Create a virtual disk
 	disk = disk_open("myvirtualdisk", npages);
